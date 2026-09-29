@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#0b1020">
+<title>Bills Planner</title>
+<script>
+/* Apply the saved theme before first paint so the page doesn't flash. */
+(function(){
+  try{
+    var s = JSON.parse(localStorage.getItem("bp5.state") || "null");
+    var t = (s && s.ui && s.ui.theme) || "system";
+    if(t === "system") t = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", t);
+  }catch(e){}
+})();
+</script>
+<style>
+/*@CSS@*/
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+<div id="overlay-root"></div>
+<div id="toast-root" class="toast-root" aria-live="polite"></div>
+<noscript><p style="padding:24px">Bills Planner needs JavaScript turned on.</p></noscript>
+<script>
+/*@JS@*/
+</script>
+</body>
+</html>

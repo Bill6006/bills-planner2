@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Parity check: Bills Planner 4 vs 5</title>
+<style>
+  body{ font: 13px system-ui, sans-serif; margin: 12px; }
+  iframe{ width: 1000px; height: 640px; border: 1px solid #ccc; display: block; margin: 6px 0; }
+  pre{ white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Parity check: Bills Planner 4 (oracle) vs 5 (new engine)</h1>
+<pre id="out">Loading…</pre>
+<!-- Serve the repo root (python -m http.server) and open /tests/parity.html. -->
+<iframe id="old" src="old.html"></iframe>
+<iframe id="neo" src="../dist/index.html?test=1"></iframe>
+<script>
+/* ---------------- datasets ---------------- */
+const DATASETS = [
+  {
+    name: "A biweekly basic",
+    views: ["2026-08", "2026-09", "2026-10", "2026-12"],
+    data: {
+      ui: { theme: "dark", pocketShiftBackOne: true, daysBeforeAfter: 3 },
+      settings: {
+        baseMonth: "2026-09", baseBillsBalance: 1450, baseSavingsBalance: 5200, trueSavingsMonth: "2026-09", cushion: 200,
+        pocket: { minimumSurvival: 300, thresholdMode: "net" },
+        pay: { frequency: "biweekly", paycheckCap: 2400, anchorNextPayday: "2026-10-02", semimonthlyDom1: 15, semimonthlyDom2: 31, monthlyDom: 15, customDates: [] },
+        pay2: null, otherIncomes: [], savings: { monthlyGoal: 400, timelineMonths: 6 }
+      },
+      selectedMonth: "2026-09",
+      bills: [
+        { id: "b1", name: "Rent", amount: 1450, rule: { type: "monthly_dom", dom: 1 } },
+        { id: "b2", name: "Gym", amount: 35, rule: { type: "monthly_dom", dom: 3 } },
+        { id: "b3", name: "Car insurance", amount: 140, rule: { type: "monthly_dom", dom: 5 } },
+        { id: "b4", name: "Streaming", amount: 18, rule: { type: "monthly_dom", dom: 9 } },
+        { id: "b5", name: "Electric", amount: 120, rule: { type: "monthly_dom", dom: 12 } },
+        { id: "b6", name: "Internet", amount: 70, rule: { type: "monthly_dom", dom: 18 } },
+        { id: "b7", name: "Phone", amount: 85, rule: { type: "monthly_dom", dom: 22 } }
+      ],
+      extras: [
+        { id: "x1", name: "Groceries", amount: 220, rule: { type: "perpay" } },
+        { id: "x2", name: "Gas", amount: 45, rule: { type: "weekly_dow", dow: 5 } },
+        { id: "x3", name: "Dining out", amount: 80, rule: { type: "perpay" } }
+      ],
+      debts: [
+        { id: "d1", name: "Visa card", balance: 3200, originalBalance: 3600, apr: 22.9, minPayment: 90, extraPayment: 60, dueDay: 20, priority: 1, payments: [] },
+        { id: "d2", name: "Car loan", balance: 8400, originalBalance: 9800, apr: 6.5, minPayment: 310, extraPayment: 0, dueDay: 8, priority: 2, payments: [] }
+      ],
+      extraSpendEntries: [
+        { id: "s1", extraId: "x1", extraName: "Groceries", amount: 120, entryType: "spend", date: "2026-09-05", note: "Costco", createdAt: "2026-09-05T18:00:00Z" },
+        { id: "s2", extraId: "x2", extraName: "Gas", amount: 44, entryType: "spend", date: "2026-09-08", note: "Shell", createdAt: "2026-09-08T18:00:00Z" },
+        { id: "s3", extraId: "x3", extraName: "Dining out", amount: 58.2, entryType: "spend", date: "2026-09-12", note: "Thai", createdAt: "2026-09-12T18:00:00Z" },
+        { id: "s4", extraId: "x1", extraName: "Groceries", amount: 96.4, entryType: "spend", date: "2026-09-19", note: "Kroger", createdAt: "2026-09-19T18:00:00Z" },
+        { id: "s5", extraId: "x2", extraName: "Gas", amount: 41.1, entryType: "spend", date: "2026-09-21", note: "Shell", createdAt: "2026-09-21T18:00:00Z" },
+        { id: "s6", extraId: "x3", extraName: "Dining out", amount: 32.75, entryType: "spend", date: "2026-09-23", note: "Chipotle", createdAt: "2026-09-23T18:00:00Z" },
+        { id: "s7", extraId: "x1", extraName: "Groceries", amount: 64.12, entryType: "spend", date: "2026-09-25", note: "Aldi", createdAt: "2026-09-25T18:00:00Z" },
+        { id: "s8", extraId: "__misc__", extraName: "Misc", amount: 25, entryType: "spend", date: "2026-09-26", note: "Gift", createdAt: "2026-09-26T18:00:00Z" },
+        { id: "s9", extraId: "x1", extraName: "Groceries", amount: 110, entryType: "spend", date: "2026-08-22", note: "Costco", createdAt: "2026-08-22T18:00:00Z" }
+      ],
+      extraSpendTransfers: [],
+      events: [ { id: "2026-11-e1", event: "Travel", item: "Hotel", amount: 450, rule: { type: "one_time", anchor: "2026-11-14" } } ],
+      extrasByMonth: {}
+    }
+  },
+  {
+    name: "B semimonthly + income 2 + extra income + every rule type",
+    views: ["2026-08", "2026-09", "2026-10", "2026-11"],
+    data: {
+      ui: { theme: "neon", pocketShiftBackOne: true, daysBeforeAfter: 4, dashboardMode: "minimal", debtStrategy: "snowball" },
+      settings: {
+        baseMonth: "2026-08", baseBillsBalance: 800, baseSavingsBalance: 12000, trueSavingsMonth: "2026-07", cushion: 350,
+        pocket: { minimumSurvival: 900, thresholdMode: "base" },
+        pay: { frequency: "semimonthly", paycheckCap: 2100, anchorNextPayday: "2026-09-15", semimonthlyDom1: 15, semimonthlyDom2: 31, monthlyDom: 15, customDates: [] },
+        pay2: { frequency: "biweekly", paycheckCap: 900, anchorNextPayday: "2026-09-11", semimonthlyDom1: 15, semimonthlyDom2: 31, monthlyDom: 15, customDates: [] },
+        otherIncomes: [
+          { id: "oi1", name: "Side gig", amount: 300, rule: { type: "monthly_dom", dom: 20 } },
+          { id: "oi2", name: "Tax refund", amount: 1200, rule: { type: "one_time", anchor: "2026-10-07" } },
+          { id: "oi3", name: "Tips", amount: 40, rule: { type: "perpay" } }
+        ],
+        transferSplit: { pay2BillsPct: 30, pay2SavingsPct: 50, otherBillsPct: 20, otherSavingsPct: 60 },
+        savings: { monthlyGoal: 500, timelineMonths: 9 }
+      },
+      selectedMonth: "2026-09",
+      bills: [
+        { id: "b1", name: "Rent", amount: 1800, rule: { type: "monthly_dom", dom: 1 } },
+        { id: "b2", name: "Car", amount: 420, rule: { type: "monthly_dom", dom: 31 } },
+        { id: "b3", name: "Insurance", amount: 600, rule: { type: "annual_md", anchor: "2026-11-15" } },
+        { id: "b4", name: "Daycare", amount: 150, rule: { type: "weekly_dow", dow: 1 } },
+        { id: "b5", name: "Cleaning", amount: 90, rule: { type: "biweekly", anchor: "2026-09-03" } },
+        { id: "b6", name: "Dentist", amount: 180, rule: { type: "one_time", anchor: "2026-10-21" } },
+        { id: "b7", name: "Allowance", amount: 25, rule: { type: "perpay" } }
+      ],
+      extras: [
+        { id: "x1", name: "Groceries", amount: 180, rule: { type: "perpay" }, _extraMonth: "2026-08" },
+        { id: "x2", name: "Coffee", amount: 15, rule: { type: "weekly_dow", dow: 3 } },
+        { id: "x3", name: "Clothes", amount: 60, rule: { type: "monthly_dom", dom: 10 } },
+        { id: "x4", name: "Gifts", amount: 250, rule: { type: "annual_md", anchor: "2026-12-20" } },
+        { id: "x5", name: "Concert", amount: 120, rule: { type: "one_time", anchor: "2026-10-05" } },
+        { id: "x6", name: "Haircut", amount: 35, rule: { type: "biweekly", anchor: "2026-09-02" } }
+      ],
+      debts: [
+        { id: "d1", name: "Visa", balance: 2400, originalBalance: 3000, apr: 24.99, minPayment: 75, extraPayment: 125, dueDay: 12, priority: 2, interestStartDate: "2026-06-01",
+          payments: [ { id: "p1", date: "2026-07-12", amount: 200 }, { id: "p2", date: "2026-08-12", amount: 200 }, { id: "p3", date: "2026-09-12", amount: 200 } ] },
+        { id: "d2", name: "Student loan", balance: 15000, apr: 4.5, minPayment: 180, extraPayment: 0, dueDay: 25, priority: 1, payments: [] },
+        { id: "d3", name: "Store card", balance: 300, apr: 29.99, minPayment: 100, extraPayment: 0, dueDay: 5, priority: 3, payments: [] }
+      ],
+      extraSpendEntries: [
+        { id: "e1", extraId: "x1", extraName: "Groceries", amount: 140.5, date: "2026-08-16", note: "", createdAt: "2026-08-16T12:00:00Z" },
+        { id: "e2", extraId: "x2", extraName: "Coffee", amount: 6.25, date: "2026-08-29", note: "", createdAt: "2026-08-29T12:00:00Z" },
+        { id: "e3", extraId: "x3", extraName: "Clothes", amount: 75, date: "2026-09-02", note: "", createdAt: "2026-09-02T12:00:00Z" },
+        { id: "e4", extraId: "x1", extraName: "Groceries", amount: 88.1, date: "2026-09-10", note: "", createdAt: "2026-09-10T12:00:00Z" },
+        { id: "e5", extraId: "x1", extraName: "Groceries", amount: -20, entryType: "refund", date: "2026-09-15", note: "return", createdAt: "2026-09-15T12:00:00Z" },
+        { id: "e6", extraId: "__misc__", extraName: "Misc", amount: 42, date: "2026-09-18", note: "", createdAt: "2026-09-18T12:00:00Z" },
+        { id: "e7", extraId: "x6", extraName: "Haircut", amount: 35, date: "2026-09-21", note: "", createdAt: "2026-09-21T12:00:00Z" },
+        { id: "e8", extraId: "x2", extraName: "Coffee", amount: 5.5, date: "2026-09-25", note: "", createdAt: "2026-09-25T12:00:00Z" },
+        { id: "e9", extraId: "x1", extraName: "Groceries", amount: 101.33, date: "2026-09-27", note: "", createdAt: "2026-09-27T12:00:00Z" },
+        { id: "e10", extraId: "x5", extraName: "Concert", amount: 130, date: "2026-09-28", note: "", createdAt: "2026-09-28T12:00:00Z" },
+        { id: "e11", extraId: "x9", extraName: "Old category", amount: 12, date: "2026-09-28", note: "", createdAt: "2026-09-28T13:00:00Z" },
+        { id: "e12", extraId: "x1", extraName: "Groceries", amount: 60, date: "2026-10-01", note: "", createdAt: "2026-10-01T12:00:00Z" }
+      ],
+      extraSpendTransfers: [
+        { id: "t1", fromExtraId: "x3", toExtraId: "x1", fromExtraName: "Clothes", toExtraName: "Groceries", amount: 30, date: "2026-09-16" },
+        { id: "t2", fromExtraId: "x2", toExtraId: "__misc__", fromExtraName: "Coffee", toExtraName: "Misc", amount: 10, date: "2026-09-26" }
+      ],
+      events: [
+        { event: "Travel", item: "Flights", amount: 640, rule: { type: "one_time", anchor: "2026-10-18" } },
+        { event: "Travel", item: "Hotel", amount: 520, date: "2026-11-02" },
+        { id: "2026-08-e9", event: "Car", item: "Tires", amount: 700, rule: { type: "one_time", anchor: "2026-08-20" } }
+      ],
+      extrasByMonth: {}
+    }
+  },
+  {
+    name: "C weekly + custom income 2, viewing before the starting month",
+    views: ["2026-09", "2026-10", "2026-11"],
+    data: {
+      ui: { theme: "light", pocketShiftBackOne: false, daysBeforeAfter: 2 },
+      settings: {
+        baseMonth: "2026-10", baseBillsBalance: 1200, baseSavingsBalance: 3000, trueSavingsMonth: "2026-10", cushion: 100,
+        pocket: { minimumSurvival: 0, thresholdMode: "net" },
+        pay: { frequency: "weekly", paycheckCap: 950, anchorNextPayday: "2026-09-04", semimonthlyDom1: 15, semimonthlyDom2: 31, monthlyDom: 15, customDates: [] },
+        pay2: { frequency: "custom", paycheckCap: 400, anchorNextPayday: "2026-09-15", customDates: ["2026-09-15", "2026-10-15", "2026-11-13", "2026-08-14"], semimonthlyDom1: 15, semimonthlyDom2: 31, monthlyDom: 15 },
+        otherIncomes: [], savings: { monthlyGoal: 300, timelineMonths: 4 }
+      },
+      selectedMonth: "2026-10",
+      bills: [
+        { id: "b1", name: "Rent", amount: 1100, rule: { type: "monthly_dom", dom: 3 } },
+        { id: "b2", name: "Utilities", amount: 160, rule: { type: "monthly_dom", dom: 28 } },
+        { id: "b3", name: "Phone", amount: 60, rule: { type: "monthly_dom", dom: 30 } },
+        { id: "b4", name: "Streaming", amount: 15, rule: { type: "monthly_dom", dom: 31 } }
+      ],
+      extras: [
+        { id: "x1", name: "Groceries", amount: 90, rule: { type: "weekly_dow", dow: 6 } },
+        { id: "x2", name: "Fun", amount: 50, rule: { type: "perpay" } }
+      ],
+      debts: [],
+      extraSpendEntries: [
+        { id: "c1", extraId: "x1", extraName: "Groceries", amount: 82, date: "2026-09-26", createdAt: "2026-09-26T10:00:00Z" },
+        { id: "c2", extraId: "x2", extraName: "Fun", amount: 64, date: "2026-09-27", createdAt: "2026-09-27T10:00:00Z" }
+      ],
+      extraSpendTransfers: [], events: [], extrasByMonth: {}
+    }
+  },
+  {
+    name: "D paycheck too small for the transfers",
+    views: ["2026-09", "2026-10", "2027-02"],
+    data: {
+      ui: { theme: "dark", pocketShiftBackOne: true, daysBeforeAfter: 3 },
+      settings: {
+        baseMonth: "2026-09", baseBillsBalance: 0, baseSavingsBalance: 0, trueSavingsMonth: "2026-09", cushion: 50,
+        pocket: { minimumSurvival: 200, thresholdMode: "net" },
+        pay: { frequency: "monthly", paycheckCap: 1500, anchorNextPayday: "2026-09-30", semimonthlyDom1: 15, semimonthlyDom2: 31, monthlyDom: 31, customDates: [] },
+        pay2: null, otherIncomes: [], savings: { monthlyGoal: 400, timelineMonths: 3 }
+      },
+      selectedMonth: "2026-09",
+      bills: [
+        { id: "b1", name: "Rent", amount: 1100, rule: { type: "monthly_dom", dom: 1 } },
+        { id: "b2", name: "Car", amount: 300, rule: { type: "monthly_dom", dom: 15 } }
+      ],
+      extras: [ { id: "x1", name: "Food", amount: 300, rule: { type: "perpay" } } ],
+      debts: [],
+      extraSpendEntries: [ { id: "d1", extraId: "x1", extraName: "Food", amount: 50, date: "2026-09-02" } ],
+      extraSpendTransfers: [], events: [], extrasByMonth: {}
+    }
+  },
+  {
+    name: "E brand new (empty)",
+    views: ["2026-09"],
+    data: { ui: {}, settings: {}, selectedMonth: "2026-09", bills: [], extras: [], debts: [], extraSpendEntries: [], extraSpendTransfers: [], events: [], extrasByMonth: {} }
+  }
+];
+
+/* ---------------- helpers ---------------- */
+const $out = document.getElementById("out");
+function log(s){ $out.textContent += "\n" + s; }
+function frame(id){
+  const f = document.getElementById(id);
+  const ok = () => {
+    try{
+      const w = f.contentWindow;
+      return w && w.document.readyState === "complete" && (id === "neo" ? !!w.BP : typeof w.render === "function");
+    }catch(_){ return false; }
+  };
+  return new Promise(res => {
+    const tick = () => ok() ? res(f.contentWindow) : setTimeout(tick, 50);
+    tick();
+  });
+}
+const num = t => {
+  if(t == null) return null;
+  const s = String(t).replace(/−/g, "-").replace(/[^0-9.\-]/g, "");
+  if(!s || s === "-" || s === ".") return null;
+  return Math.round(Number(s) * 100) / 100;
+};
+const txt = el => el ? el.textContent.replace(/\s+/g, " ").trim() : null;
+const r2 = n => (n == null || !Number.isFinite(Number(n))) ? n : Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+function diffInto(diffs, path, a, b){
+  if(a === b) return;
+  if(typeof a === "number" && typeof b === "number" && Math.abs(a - b) < 0.0051) return;
+  if(Array.isArray(a) && Array.isArray(b)){
+    if(a.length !== b.length){ diffs.push(`${path}.length old=${a.length} new=${b.length}`); }
+    for(let i = 0; i < Math.min(a.length, b.length); i++) diffInto(diffs, `${path}[${i}]`, a[i], b[i]);
+    return;
+  }
+  if(a && b && typeof a === "object" && typeof b === "object"){
+    for(const k of new Set([...Object.keys(a), ...Object.keys(b)])) diffInto(diffs, `${path}.${k}`, a[k], b[k]);
+    return;
+  }
+  diffs.push(`${path} old=${JSON.stringify(a)} new=${JSON.stringify(b)}`);
+}
+
+/* ---------------- old app (oracle) ---------------- */
+function oldLoad(W, data, view){
+  W.__DJSON = JSON.stringify(data);
+  W.eval(`state = migrateState(JSON.parse(window.__DJSON));
+    state.selectedMonth = ${JSON.stringify(view)};
+    state.ui.debtWorkflowVersion = 0; state.ui.dashboardMode = "details"; state.ui.ledgerView = "table";
+    state.ui.collapseEmpty = false; state.ui.showSidePocket = true;
+    state.ui.trackSpendingCollapsed = false; state.ui.graphsSectionCollapsed = false; state.ui.debtSectionCollapsed = false;
+    state.ui.billsSectionCollapsed = false; state.ui.extraCostsSectionCollapsed = false;`);
+}
+function oldRender(W, patch){
+  W.__PATCH = JSON.stringify(patch || {});
+  W.eval(`Object.assign(state.ui, JSON.parse(window.__PATCH)); render();`);
+  return W.document;
+}
+function serializePlans(E, plans, iso){
+  const out = {};
+  for(const [mk, p] of plans.entries()){
+    out[mk] = {
+      paydays: p.paydays.map(iso), payCaps: p.payCaps, billsPerPaycheck: p.billsPerPaycheck, savingsPerPaycheck: p.savingsPerPaycheck,
+      AS2: p.AS2, TargetCarry: p.TargetCarry, TB1: p.TB1, extraFunding: p.extraFunding, topup: p.topup, startAfterTopup: p.startAfterTopup,
+      TB2_at_start: p.TB2_at_start, startBills: p.startBills, startSavings: p.startSavings, billsStartSurplus: p.billsStartSurplus,
+      endBills: p.endBills, endSavings: p.endSavings, lowestBillsBal: p.lowestBillsBal,
+      lowestBillsBalDate: p.lowestBillsBalDate == null ? null : iso(p.lowestBillsBalDate),
+      pocketSpentByPayIndex: p.pocketSpentByPayIndex, otherIncomeTotal: p.otherIncomeTotal, otherIncomePerPayday: p.otherIncomePerPayday,
+      nextPaydayAfterLast: p.nextPaydayAfterLast == null ? null : iso(p.nextPaydayAfterLast),
+      rows: p.rows.map(r => [iso(r.ms), r.transferIn, r.billsOut, r.savingsIn, r.savingsOut, r.pocketOut, r.billsBalance, r.billsBalanceWorking, r.savingsBalance, r.notes])
+    };
+  }
+  return out;
+}
+function oldOutputs(W, ds, view){
+  oldLoad(W, ds.data, view);
+  const st = W.eval("state");
+  const base = String(st.settings.baseMonth || view).trim();
+  const horizon = Math.max(12, Number(st.settings?.savings?.timelineMonths || 6) + 2);
+  const bi = W.monthIndex(base), vi = W.monthIndex(view);
+  const rs = bi <= vi ? base : view, re = bi <= vi ? view : base;
+  const out = { range: [rs, re, horizon] };
+  out.plans = serializePlans(null, W.buildPlanRange(rs, W.addMonthsKey(re, horizon), st.settings, st.bills).plans, W.isoDate);
+
+  // Ledger tab: dashboard cards, ledger table, spending-money list (both windows)
+  for(const shift of [true, false]){
+    const doc = oldRender(W, { activeTab: "ledger", pocketShiftBackOne: shift });
+    if(shift){
+      out.stats = {};
+      const map = { "Start balance": "startBalance", "Fixed transfer per payday": "fixedTransfer", "Target carry (next month AS2)": "targetCarry",
+        "Bills total (month)": "monthBillsTotal", "Bills + pocket costs (month)": "monthBillsPlusPocket", "Lowest projected bills balance": "lowestBillsBalance",
+        "AS2 (seed needed)": "as2", "TB2 (auto start)": "tb2", "End-of-month Bills": "eomBills", "Pocket leftover (month)": "pocketMonth" };
+      doc.querySelectorAll("#cards .card").forEach(c => { const k = map[txt(c.querySelector(".k"))]; if(k) out.stats[k] = num(txt(c.querySelector(".v"))); });
+      out.ledger = [...doc.querySelectorAll("#panelBody .ledgerTableWrap tbody tr")].map(tr => {
+        const td = tr.querySelectorAll("td");
+        return [tr.id.replace("day-", ""), num(txt(td[1].querySelector(".num"))), num(txt(td[2])), num(txt(td[3])), num(txt(td[4])), num(txt(td[5])), txt(td[6])];
+      });
+    }
+    out["pocket_" + shift] = [...doc.querySelectorAll("#panelBody .pocketInline .pocketItem")].map(it => ({
+      mk: it.dataset.mk, start: W.isoDate(Number(it.dataset.start)), end: W.isoDate(Number(it.dataset.end)),
+      free: num(txt(it.querySelector(".pocketNetValue"))), base: num(txt(it.querySelector(".pocketBaseValue"))),
+      spent: num(txt(it.querySelector(".pocketMeta span"))),
+      names: [...it.querySelectorAll(".pe")].map(txt).filter(n => n !== "none"),
+      low: it.dataset.thresholdLow === "1"
+    }));
+    const warn = doc.querySelector("#pocketInlineWarn");
+    out["pocketWarn_" + shift] = !!(warn && warn.style.display !== "none" && txt(warn));
+  }
+
+  // Paydays tab
+  {
+    const doc = oldRender(W, { activeTab: "paydays" });
+    out.paydays = [...doc.querySelectorAll("#panelBody .tableWrap tbody tr")].filter(tr => tr.querySelectorAll("td").length === 5).map(tr => {
+      const td = tr.querySelectorAll("td");
+      return [txt(td[0]).slice(0,10), num(txt(td[1])), num(txt(td[2])), num(txt(td[3])), num(txt(td[4]))];
+    });
+    const h = doc.querySelector("#payHealth");
+    out.payHealth = !!(h && h.style.display !== "none" && txt(h));
+    const oi = doc.querySelector("#otherIncomeSummary");
+    out.otherIncome = (oi && oi.style.display !== "none") ? txt(oi) : null;
+  }
+
+  // Bills tab: spending, graphs, history, debt
+  {
+    let doc = oldRender(W, { activeTab: "bills", extraSpendSummaryMode: "pay", extraSpendGraphRange: "month", extraSpendGraphHiddenIds: [], extraSpendGraphOpenId: "" });
+    out.extrasTotal = num(txt(doc.querySelector("#extrasTotalText")));
+    out.chipsPay = [...doc.querySelectorAll(".spendSummaryWrap .spendMonthChips .chip")].map(c => num(txt(c)));
+    const catGrid = doc.querySelector(".spendCatGrid");
+    const lbl = [...doc.querySelectorAll("div")].find(d => /^Pay period •/.test(txt(d) || "") && d.children.length === 0);
+    out.activePeriod = lbl ? txt(lbl).replace("Pay period • ", "") : null;
+    out.cats = catGrid ? [...catGrid.querySelectorAll(".spendCatCard")].map(c => {
+      const nameEl = c.querySelector(".spendCatName");
+      const name = nameEl ? [...nameEl.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join("").trim() : null;
+      const vals = {};
+      c.querySelectorAll(".spendCatMetaRow").forEach(r => { vals[txt(r.querySelector(".muted"))] = num(txt(r.querySelector("strong"))); });
+      return { name, count: num(txt(c.querySelector(".spendCatMetaLite"))), budget: vals.Budgeted, spent: vals.Spent, remaining: vals.Remaining, moved: vals.Moved ?? null };
+    }) : [];
+    const graph = d => ({
+      cols: [...d.querySelectorAll(".graphCol[data-graph-id]")].map(c => ({ id: c.dataset.graphId, label: c.dataset.graphLabel.split(" • ")[0], cls: c.querySelector(".graphColBar").className.replace("graphColBar", "").trim() })),
+      chips: [...d.querySelectorAll(".graphStats .chip")].map(c => txt(c))
+    });
+    out.graphMonth = graph(doc);
+    out.history = [...doc.querySelectorAll("details.spendHistPeriod")].map(d => [d.dataset.openKey, txt(d.querySelector(".spendHistMeta"))]);
+    out.debtStats = [...doc.querySelectorAll(".debtStat .v")].map(v => txt(v));
+    out.debtRoute = [...doc.querySelectorAll(".debtRouteItem")].map(r => [txt(r.querySelector(".debtRouteName")), txt(r.querySelector(".debtRouteMeta")), txt(r.querySelector(".debtRouteBalance")), txt(r.querySelector(".debtRouteTime"))]);
+    const hint = doc.querySelector(".debtMiniHint strong");
+    out.debtInterest = hint ? num(txt(hint)) : null;
+    doc = oldRender(W, { extraSpendSummaryMode: "month" });
+    out.chipsMonth = [...doc.querySelectorAll(".spendSummaryWrap .spendMonthChips .chip")].map(c => num(txt(c)));
+    doc = oldRender(W, { extraSpendGraphRange: "last7" });
+    out.graphLast7 = graph(doc);
+    const firstId = out.graphMonth.cols[0]?.id;
+    if(firstId){
+      doc = oldRender(W, { extraSpendGraphRange: "custom", extraSpendGraphCustomSource: "month", extraSpendGraphHiddenIds: [firstId] });
+      out.graphCustom = graph(doc);
+    }
+  }
+
+  // Savings tab (the timeline only compares when viewing the starting month; v5 replaces v4's projected mode)
+  {
+    const doc = oldRender(W, { activeTab: "savings" });
+    out.savPer = num(doc.querySelector("#savPer")?.value);
+    out.savAdds = [...doc.querySelectorAll(".paydaySavAddsTable tbody tr")].filter(tr => tr.querySelectorAll("td").length === 3).map(tr => {
+      const td = tr.querySelectorAll("td");
+      return [txt(td[0]).slice(0,10), num(txt(td[1])), num(txt(td[2]))];
+    });
+    if(view === base){
+      out.timeline = [...doc.querySelectorAll(".savingsTimelineTable tbody tr")].map(tr => {
+        const td = tr.querySelectorAll("td");
+        return [txt(td[0]), num(txt(td[1])), num(txt(td[2].querySelector(".num")))];
+      });
+    }
+  }
+  // Events tab
+  {
+    const doc = oldRender(W, { activeTab: "events" });
+    out.eventsTotal = num(doc.querySelector("#evTotalAll")?.value);
+  }
+  return out;
+}
+
+/* ---------------- new engine ---------------- */
+function neoOutputs(N, ds, view){
+  const E = N.BP.E;
+  const S = N.BP.test.load(JSON.parse(JSON.stringify(ds.data)));
+  S.selectedMonth = view;
+  E.resetCache();
+  const base = String(S.settings.baseMonth || view).trim();
+  const horizon = Math.max(12, Number(S.settings?.savings?.timelineMonths || 6) + 2);
+  const bi = E.monthIndex(base), vi = E.monthIndex(view);
+  const rs = bi <= vi ? base : view, re = bi <= vi ? view : base;
+  const out = { range: [rs, re, horizon] };
+  const ctx = E.buildPlanRange(S, rs, E.addMonthsKey(re, horizon));
+  out.plans = serializePlans(E, ctx.plans, E.isoDate);
+  const plan = ctx.plans.get(view) || E.placeholderPlan(S, view);
+
+  const st = E.monthStats(S, plan);
+  out.stats = Object.fromEntries(E.STAT_KEYS.map(k => [k, r2(st[k])]));
+  out.ledger = E.ledgerDays(S, ctx, view, S.ui.daysBeforeAfter, false).map(d => {
+    const r = d.row;
+    return [E.isoDate(d.ms), r2(r.billsBalanceWorking ?? r.billsBalance), r.transferIn > 0 ? r2(r.transferIn) : null, r.billsOut > 0 ? r2(-r.billsOut) : null, r2(r.savingsBalance), r.savingsIn > 0 ? r2(r.savingsIn) : null, r.notes];
+  });
+  for(const shift of [true, false]){
+    const w = E.pocketWindow(S, view, shift);
+    out["pocket_" + shift] = w.periods.map(p => ({ mk: p.mk, start: E.isoDate(p.start), end: E.isoDate(p.end), free: p.freeAfterBudgets, base: p.base, spent: p.loggedSpent, names: p.names, low: !!p.threshold }));
+    out["pocketWarn_" + shift] = !!w.warn;
+  }
+
+  out.paydays = plan.paydays.map((p, i) => [E.isoDate(p), r2(plan.payCaps?.[i] ?? 0), r2(plan.savingsPerPaycheck), r2(plan.billsPerPaycheck), r2(E.pocketBasePerPaycheck(S, plan, i))]);
+  const h = E.pocketHealth(S, plan);
+  out.payHealth = !!(h && ((Math.abs(h.maxBase) < 0.01 && h.required >= (h.capMin - 0.01)) || h.minNet < 0));
+  out.otherIncome = S.settings.otherIncomes.length
+    ? `This month: +${E.fmtMoney(plan.otherIncomeTotal || 0)} total (≈ +${E.fmtMoney(plan.otherIncomePerPayday || 0)} per payday)`
+    : null;
+
+  let extrasTotal = 0;
+  for(const arr of E.billOccurrencesForMonth(view, S.extras, S.settings).values()) for(const it of arr) extrasTotal += Number(it.amount || 0);
+  out.extrasTotal = r2(extrasTotal);
+  const active = E.spendActivePeriod(S, view, "");
+  const fmtD = iso => { const [y,m,d] = iso.split("-"); return `${m}/${d}/${y}`; };
+  out.activePeriod = active.startIso ? `${fmtD(active.startIso)} – ${fmtD(active.endIso)}` : null;
+  out.chipsPay = [active.snapshot.totals.budget, active.snapshot.totals.spent, active.snapshot.totals.remaining].map(r2);
+  out.cats = active.snapshot.items.map(it => ({
+    name: it.name,
+    count: E.allSpendEntries(S).filter(e => { const ms = E.parseISOToMs(e.date); return ms >= active.startMs && ms <= active.endMs && String(e.extraId) === String(it.id); }).length,
+    budget: r2(it.budget), spent: r2(it.spent), remaining: r2(it.remaining), moved: it.transferNet ? r2(it.transferNet) : null
+  }));
+  const graph = meta => {
+    const dense = meta.rows.length >= 5;
+    return {
+      cols: meta.rows.map(r => {
+        const budget = Math.max(0, Number(r.budget || 0));
+        const warnAt = budget > 0 ? E.round2(budget * 0.9) : Infinity;
+        const over = budget > 0 && r.spent > budget;
+        const near = budget > 0 && r.spent >= warnAt && r.spent <= budget;
+        return { id: r.id, label: `${E.fmtMD(r.startMs)} to ${E.fmtMD(r.endMs)}`, cls: over ? "over" : near ? "warn" : (r.isCurrentPeriod ? "current" : "complete") };
+      }),
+      chips: [`Average ${meta.completedCount > 0 && meta.averageSpent > 0 ? E.fmtMoney(meta.averageSpent) : "—"}`, `Total ${E.fmtMoney(meta.totalSpent)}`, `Pay periods ${meta.count}`]
+    };
+  };
+  const gm = E.graphData(S, view, "month");
+  out.graphMonth = graph(gm);
+  out.history = [];
+  for(const y of E.spendHistoryTree(S)) for(const m of y.months) for(const p of m.periods) out.history.push([`esh:p:${p.key}`, `${p.count} ${p.count === 1 ? "log" : "logs"} ${E.fmtMoney(p.total)}`]);
+  const sum = E.debtSummary(S);
+  out.debtStats = S.debts.length || true ? [E.fmtMoney(sum.totalBalance), E.fmtMoney(sum.paidSoFar), E.fmtMoney(sum.monthlyTotal), E.debtMonthsLabel(sum.longestMonths)] : [];
+  const strategy = S.ui.debtStrategy;
+  const ordered = E.debtOrderedList(S, strategy);
+  const stratLabel = strategy === "snowball" ? "Snowball" : (strategy === "custom" ? "Custom" : "Avalanche");
+  out.debtRoute = ordered.slice(0, 8).map(d => {
+    const c = E.debtPayoffCalc(d);
+    return [d.name || "Debt", `${ordered.length > 1 ? `${stratLabel} • ` : ""}APR ${Number(d.apr || 0).toFixed(2)}% • ${E.fmtMoney(c.payment)}/mo • due ${Number(d.dueDay || 1)}`, `${E.fmtMoney(Number(d.balance || 0))} left`, E.debtMonthsLabel(c.months)];
+  });
+  out.debtInterest = r2(sum.interest);
+  const ms = E.spendMonthSummary(S, view);
+  out.chipsMonth = [ms.totals.budget, ms.totals.spent, ms.totals.remaining].map(r2);
+  out.graphLast7 = graph(E.graphData(S, view, "last7"));
+  const firstId = gm.rows[0]?.id;
+  if(firstId) out.graphCustom = graph(E.graphData(S, view, "custom", "month", [firstId]));
+
+  out.savPer = r2(plan.savingsPerPaycheck);
+  out.savAdds = E.paydaySavingsAdds(plan).map(a => [E.isoDate(a.ms), a.add > 0 ? r2(a.add) : null, r2(a.balance)]);
+  if(view === base){
+    const months = E.clampInt(S.settings.savings.timelineMonths || 6, 1, 36);
+    out.timeline = E.savingsTimeline(S, ctx, months).map(r => {
+      const { y, m } = E.parseMonthKey(r.mk);
+      return [`${y}-${E.monthAbbr(m)}`, r2(r.start), r2(r.end)];
+    });
+  }
+  out.eventsTotal = r2(E.allEventsList(S).reduce((s, x) => {
+    const iso = E.normalizeISODateLoose(x?.rule?.anchor || x?.date || x?.iso || "");
+    return (iso && iso.slice(0,7) === view) ? s + Number(x.amount || 0) : s;
+  }, 0));
+  return out;
+}
+
+/* ---------------- run ---------------- */
+// Old-app debt rows show "$X left" but debtStats compare as text; numbers compare numerically.
+async function runParity(which, opts = {}){
+  const W = await frame("old");
+  const N = await frame("neo");
+  N.BP.E.opts.debtPayoffCutoff = opts.cutoff === true;
+  const report = [];
+  const list = which == null ? DATASETS : DATASETS.filter((d, i) => i === which || d.name.startsWith(which));
+  for(const ds of list){
+    for(const view of ds.views){
+      let a, b, err = null;
+      try{ a = oldOutputs(W, ds, view); }catch(e){ err = "old: " + e.message; }
+      try{ b = neoOutputs(N, ds, view); }catch(e){ err = (err ? err + " | " : "") + "new: " + e.message + "\n" + e.stack; }
+      const diffs = [];
+      if(!err) diffInto(diffs, "", a, b);
+      report.push({ dataset: ds.name, view, err, diffCount: diffs.length, diffs: diffs.slice(0, 25) });
+    }
+  }
+  return report;
+}
+window.runParity = runParity;
+window.DATASETS = DATASETS;
+window.oldOutputs = oldOutputs;
+window.neoOutputs = neoOutputs;
+$out.textContent = "Ready. Call runParity().";
+</script>
+</body>
+</html>
